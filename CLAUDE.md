@@ -62,7 +62,7 @@ Mike's actual goal: a coach for Bhramari pranayama (bee breath) that keeps his h
 
 ## Breath Pacer (pacer.html)
 
-A timed pranayama pacer: Box (1:1:1:1), 1:4:2:1 and Custom ratios, multiplied by a "time unit" in seconds. Phases with zero length are skipped. Each pattern is bookmarkable as `#box`, `#1-4-2-1` or `#custom`. The 1:4:2:1 pattern has a "Skip the final hold" option (saved as `skipFinal`) that makes it 1:4:2. The button label changes to match, and the link becomes `#1-4-2`.
+A timed pranayama pacer: Box (1:1:1:1), 1:4:2:1, 4-7-8, 1:2 and Custom ratios, multiplied by a "time unit" in seconds. Phases with zero length are skipped. Patterns: Box, 1:4:2:1, 4-7-8 (`p478`, ratio [4,7,8,0], default unit 1 s), 1:2 extended exhale (`ext`, [1,0,2,0], default unit 4 s) and Custom. Each is bookmarkable as `#box`, `#1-4-2-1`, `#4-7-8`, `#1-2` or `#custom` (see the `HASH` map). The segmented control shows 3+2 buttons on phones and 5 across on wide screens. The 1:4:2:1 pattern has a "Skip the final hold" option (saved as `skipFinal`) that makes it 1:4:2. The button label changes to match, and the link becomes `#1-4-2`.
 
 - **No breath detection, deliberately.** A phone mic can't reliably hear quiet nasal breathing or tell an inhale from an exhale, so Mike chose the timed pacer.
 - **Timing runs on the AudioContext clock.** Cues are scheduled 3 s ahead every 250 ms, so they stay sample-accurate even when timers are throttled. Pause suspends the context, which freezes its clock. Reset closes the context to drop any cues already scheduled.
