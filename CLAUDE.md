@@ -20,6 +20,8 @@ Mike (Kotlin/Android developer) looked at the Play Store app "Sound Spectrum Ana
 - Readout panel: dominant frequency, note and cents, RMS level in dBFS, peak dB.
 - Top-5 peaks table: local maxima above −90 dB, parabolic interpolation, 60-cent separation.
 - "Number updates" selector (Live / 4 per sec / 2 per sec, the default / 1 per sec), remembered in localStorage. In the slower modes, power is averaged per bin and RMS over the interval, and peaks are found on the averaged spectrum. The graph always stays live.
+- Detection range ("Detect from X to Y Hz"): peaks, the readout and the table only consider that range, and the graph dims what's outside it. Saved in localStorage.
+- Sticky readout (on by default): the dominant readout only switches to a different peak (more than 60 cents away) when it is at least 3 dB louder for 2 or more updates and 600 ms or more. Added because a ~75 Hz hum and ~500 Hz sound of similar level made the readout flip between them. The graph dot follows the same source.
 - Peaks table always has five fixed rows (dashes when empty) so the layout never jumps.
 - Tap/drag cursor readout, Freeze/Resume, FFT size selector, smoothing selector, peak-hold toggle and Clear peaks.
 - Screen wake lock while running. Light and dark themes via CSS tokens.

@@ -50,6 +50,7 @@ th:first-child,td:first-child{text-align:left}
 tr:last-child td{border-bottom:0}
 .opts{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px;align-items:center}
 .opts label{display:flex;gap:6px;align-items:center}
+input[type=number]{width:5.5em;font:13px var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
 select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
 .note{color:var(--muted);font-size:12px;max-width:70ch}
 @media (max-width:520px){
@@ -114,6 +115,12 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
       <option value="1000">Very slow (1 per sec)</option>
     </select>
   </label>
+  <label>Detect from
+    <input type="number" id="fLo" inputmode="numeric" min="20" max="20000" step="1" value="20"> to
+    <input type="number" id="fHi" inputmode="numeric" min="20" max="20000" step="1" value="20000"> Hz
+  </label>
+  <label title="Only switch to a new frequency when it is at least 3 dB louder for over half a second">
+    <input type="checkbox" id="stickyChk" checked> Sticky readout</label>
   <label><input type="checkbox" id="holdChk" checked> Peak hold</label>
   <button id="resetBtn" style="padding:4px 10px;font-size:13px">Clear peaks</button>
 </section>
@@ -202,8 +209,34 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
     return { off: Math.max(-.5, Math.min(.5, p)), db: b - .25 * (a - c) * p };
   };
 
+  // User-chosen detection range, clamped to what the mic/sample rate can show
+  function range() {
+    let lo = +$('fLo').value || FMIN, hi = +$('fHi').value || fmax;
+    lo = Math.max(FMIN, Math.min(lo, fmax)); hi = Math.max(FMIN, Math.min(hi, fmax));
+    return lo < hi ? { lo, hi } : { lo: FMIN, hi: fmax };
+  }
+
+  // Sticky dominant: only switch when another peak is >= 3 dB louder
+  // for at least 2 updates and 600 ms, so near-equal sources don't flip-flop.
+  const STICK_DB = 3, STICK_MS = 600;
+  let lock = null, chal = null;
+  const near = (a, b) => Math.abs(1200 * Math.log2(a / b)) <= 60;
+  function pickDominant(peaks, now) {
+    const top = peaks[0];
+    if (!top || !$('stickyChk').checked) { lock = top || null; chal = null; return lock; }
+    if (!lock) { lock = top; return top; }
+    const cur = peaks.find(p => near(p.f, lock.f));
+    if (cur && (cur === top || top.db - cur.db < STICK_DB)) { lock = cur; chal = null; return cur; }
+    if (!chal || !near(chal.f, top.f)) chal = { f: top.f, since: now, n: 0 };
+    chal.f = top.f; chal.n++;
+    if (chal.n >= 2 && now - chal.since >= STICK_MS) { lock = top; chal = null; return top; }
+    if (cur) lock = cur;
+    return lock;
+  }
+
   function findPeaks(d, binHz) {
-    const lo = Math.max(2, Math.ceil(FMIN / binHz)), hi = Math.min(d.length - 2, Math.floor(fmax / binHz));
+    const r = range();
+    const lo = Math.max(2, Math.ceil(r.lo / binHz)), hi = Math.min(d.length - 2, Math.floor(r.hi / binHz));
     const floor = -90, cands = [];
     for (let i = lo; i <= hi; i++) {
       if (d[i] > floor && d[i] >= d[i - 1] && d[i] > d[i + 1]) {
@@ -260,16 +293,17 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
     const now = performance.now(), interval = +$('rate').value;
     if (now - acc.t >= interval) {
       for (let i = 0; i < avgDb.length; i++) avgDb[i] = 10 * Math.log10(acc.pow[i] / acc.n + 1e-20);
-      updateNumbers(findPeaks(avgDb, binHz), 10 * Math.log10(acc.ms / acc.n + 1e-24));
+      const avgPeaks = findPeaks(avgDb, binHz);
+      updateNumbers(avgPeaks, pickDominant(avgPeaks, now), 10 * Math.log10(acc.ms / acc.n + 1e-24));
       resetAcc(now);
     }
     drawSpectrum(livePeaks, binHz);
   }
 
-  function updateNumbers(peaks, rms) {
+  function updateNumbers(peaks, p, rms) {
     $('level').innerHTML = (rms < -120 ? '—' : rms.toFixed(1)) + '<small>dBFS</small>';
-    if (peaks.length) {
-      const p = peaks[0], n = noteOf(p.f);
+    if (p) {
+      const n = noteOf(p.f);
       $('freq').innerHTML = fmtF(p.f) + '<small>Hz</small>';
       $('note').textContent = n.name;
       $('cents').textContent = (n.cents >= 0 ? '+' : '') + n.cents + ' cents';
@@ -287,8 +321,17 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
     if ($('holdChk').checked) trace(holdData, css('--hold'), false, g, binHz);
     trace(freqData, css('--trace'), true, g, binHz);
 
-    if (peaks.length) {
-      const x = xOf(peaks[0].f, g), y = yOf(peaks[0].db, g);
+    // Dim the parts of the spectrum outside the detection range
+    const r = range();
+    ctx.globalAlpha = .7; ctx.fillStyle = css('--panel');
+    if (r.lo > FMIN) ctx.fillRect(PAD.l, PAD.t, xOf(r.lo, g) - PAD.l, g.ph);
+    if (r.hi < fmax) ctx.fillRect(xOf(r.hi, g), PAD.t, PAD.l + g.pw - xOf(r.hi, g), g.ph);
+    ctx.globalAlpha = 1;
+
+    // Dot follows the same source the readout is showing
+    const dot = lock ? peaks.find(p => near(p.f, lock.f)) : peaks[0];
+    if (dot) {
+      const x = xOf(dot.f, g), y = yOf(dot.db, g);
       ctx.fillStyle = css('--trace'); ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
     }
     if (cursorX !== null) {
@@ -356,6 +399,16 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
   $('fft').onchange = applyFFT;
   $('smooth').onchange = () => analyser && (analyser.smoothingTimeConstant = +$('smooth').value);
   try { const r = localStorage.getItem('fs-rate'); if (r !== null) $('rate').value = r; } catch {}
+  try {
+    const s = JSON.parse(localStorage.getItem('fs-detect') || 'null');
+    if (s) { $('fLo').value = s.lo; $('fHi').value = s.hi; $('stickyChk').checked = s.sticky; }
+  } catch {}
+  const saveDetect = () => {
+    lock = chal = null;
+    try { localStorage.setItem('fs-detect', JSON.stringify({ lo: $('fLo').value, hi: $('fHi').value, sticky: $('stickyChk').checked })); } catch {}
+    if (!running) drawGrid();
+  };
+  ['fLo', 'fHi', 'stickyChk'].forEach(id => $(id).addEventListener('change', saveDetect));
   $('rate').onchange = () => {
     try { localStorage.setItem('fs-rate', $('rate').value); } catch {}
     resetAcc(performance.now());
