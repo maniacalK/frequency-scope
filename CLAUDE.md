@@ -11,10 +11,10 @@ Mike (Kotlin/Android developer) looked at the Play Store app "Sound Spectrum Ana
 
 - **Detection only.** No tone or noise generator. Mike explicitly doesn't want generation.
 - **Web, not native Android.** The goal is the fastest path to a working tool. `AnalyserNode` gives the FFT for free. Native Android is reserved for later, if raw/unprocessed mic input (`AudioSource.UNPROCESSED`) or accurate sub-50 Hz readings become important.
-- **Single self-contained `index.html`.** No framework and no build step, so it can be served by GitHub Pages directly.
+- **Self-contained HTML pages.** No framework and no build step, so they can be served by GitHub Pages directly. Each page inlines its own CSS and JS.
 - **Must be served over HTTPS or localhost** for mic access. It can't run as a claude.ai artifact, because artifacts block the microphone.
 
-## Current features (index.html)
+## Spectrum analyzer (spectrum.html; was index.html until the PWA)
 
 - Log-frequency spectrum on a canvas (20 Hz to min(20 kHz, Nyquist)), y axis −110 to −10 dB, with a peak-hold trace that decays 0.25 dB per frame.
 - Readout panel: dominant frequency, note and cents, RMS level in dBFS, peak dB.
@@ -26,9 +26,24 @@ Mike (Kotlin/Android developer) looked at the Play Store app "Sound Spectrum Ana
 - Tap/drag cursor readout, Freeze/Resume, FFT size selector, smoothing selector, peak-hold toggle and Clear peaks.
 - Screen wake lock while running. Light and dark themes via CSS tokens.
 
+## PWA: "Prana Tools" (index.html launcher)
+
+Mike's wife uses an iPhone, so the app must work on both iOS and Android. It's an installable PWA rather than a native app.
+
+- **Files:** `index.html` is the launcher, with Box, 1:4:2:1 and Custom (linking to `pacer.html#...`), Bhramari and Spectrum. `manifest.webmanifest` (name "Prana Tools", short "Prana", standalone, portrait, app shortcuts), `sw.js`, and `icons/` (192, 512, maskable 512, apple-touch 180). Icons were generated with PIL.
+- **Every page** has the same `<!-- pwa --> … <!-- /pwa -->` head block (manifest, theme-color, apple-touch-icon, apple-mobile-web-app-* tags), a Home link in its header, and a one-line service worker registration at the end of `<body>`. Standalone mode has no browser back button, so the Home links are required.
+- **Service worker:** network-first for page navigations, so pushes show up as soon as you're online, with the cached copy used offline. Cache-first with background refresh for icons and Google Fonts. **Bump `CACHE` in sw.js (prana-v1 → v2) when adding or renaming files.**
+- **Launcher install help:** uses Android's `beforeinstallprompt` button when available; otherwise Chrome menu instructions, or Safari Share → Add to Home Screen on iOS. Hidden when already running standalone.
+- **iOS fixes:**
+  - The silent switch mutes Web Audio, so the pacer sets `navigator.audioSession.type = 'playback'` and, on iOS, loops a tiny silent `<audio>` (data-URI WAV) while running.
+  - Safari has no Vibration API, so vibrate options are hidden when `!('vibrate' in navigator)`.
+  - Wake lock only works in home-screen apps from iOS 18.4.
+  - No platform can keep running with the screen off; that needs native.
+- **Tested:** local server and headless Chrome. The service worker caches the shell, all pages load offline, and the only installability error was "in-incognito" (from the test harness). iPhone UA emulation hides vibrate and shows Safari steps. Not yet tested on a real iPhone, and the silent-switch fix can only be verified on a real device.
+
 ## Status
 
-Live on GitHub Pages at https://maniacalk.github.io/frequency-scope/ (public repo) and in use on Mike's Android phone in Chrome. Before pushing layout changes, check at phone width (390px, dark mode) in headless Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`.
+Live on GitHub Pages at https://maniacalk.github.io/frequency-scope/ (public repo; launcher at root, spectrum at spectrum.html) and in use on Mike's Android phone in Chrome. Before pushing layout changes, check at phone width (390px, dark mode) in headless Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`.
 
 Lesson learned: body is a flex column, so its children have `flex-shrink:0`. Without that, panels with `overflow:hidden` get squashed and clipped when the page grows taller than the screen.
 

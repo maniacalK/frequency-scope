@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- pwa -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0e0c" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prana">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- /pwa -->
 <title>Bhramari Coach</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -92,7 +103,7 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
 <body>
 <header>
   <div class="title-row"><h1>Bhramari <span>Coach</span></h1><button class="info-btn" id="infoBtn" aria-label="About this practice" title="About this practice">i</button></div>
-  <nav style="display:flex;gap:12px"><a href="pacer.html">Breath pacer</a><a href="./">Spectrum</a></nav>
+  <nav style="display:flex;gap:12px"><a href="./">Home</a><a href="pacer.html">Breath pacer</a></nav>
 </header>
 
 <section class="panel now" aria-live="polite">
@@ -386,7 +397,7 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
   document.addEventListener('visibilitychange', async () => {
     if (running && document.visibilityState === 'visible') try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
   });
-  const INFO = {"bhr": {"title": "Bhramari (bee breath)", "html": "<h3>Benefits</h3><ul><li>Humming raises nasal nitric oxide about <b>15-fold</b> compared with quietly breathing out. The vibration pumps air in and out of the sinuses, improving their ventilation.</li><li>A long, slow, hummed exhale shifts you towards the calming (parasympathetic) side. Small studies report lower heart rate and blood pressure after practice.</li><li>The sound and vibration give a strong point of focus. Many people find it calming and helpful before sleep.</li><li><b>On pitch:</b> there's no good evidence that any particular frequency is better. A steady, comfortable hum matters more than the exact Hz, and this page's real value is helping you stay consistent.</li><li><span class=\"ev\">Evidence: the humming and NO finding is solid lab physiology. For bhramari's health effects, a systematic review found only 6 studies, none randomised, all very low quality. The results are encouraging but unproven.</span></li></ul><h3>Oxygen (O₂)</h3><ul><li>At rest your blood is already about 95–99% saturated with oxygen. Slow breathing doesn't push that higher in healthy people. The claim that humming significantly boosts blood oxygen isn't established.</li></ul><h3>Carbon dioxide (CO₂)</h3><ul><li>Long hummed exhales slow your breathing rate, so CO₂ stays at or slightly above normal. You're not hyperventilating, as long as you don't gulp big, fast inhales between hums.</li><li>Slightly higher CO₂ helps haemoglobin release oxygen into tissues (the Bohr effect) and widens blood vessels in the brain.</li></ul><h3>Nitric oxide (NO)</h3><ul><li>This is the highest-NO practice of the set. During the hum, NO-rich air from the sinuses is flushed into the nose and out.</li><li>The main established effect is better sinus ventilation and higher nasal NO. Inhale through the nose afterwards to bring some of it into your lungs.</li><li>Your nose and sinuses constantly make nitric oxide (NO).</li></ul><h3>Sources</h3><ul class=\"src\"><li><a href=\"https://pubmed.ncbi.nlm.nih.gov/12119224/\" target=\"_blank\" rel=\"noopener\">Weitzberg &amp; Lundberg 2002, Am J Respir Crit Care Med</a></li><li><a href=\"https://sources.mandala.library.virginia.edu/node/85461\" target=\"_blank\" rel=\"noopener\">Effects of Bhramari Pranayama on health: a systematic review</a></li><li><a href=\"https://doaj.org/article/1fe298f698cb4ffe84a70f0adfc49765\" target=\"_blank\" rel=\"noopener\">Garg et al. 2023 meta-analysis, Int J Cardiol Cardiovasc Risk Prev</a></li></ul><p class=\"src\">General information, not medical advice. Stop if you feel dizzy, tingly or strained.</p>"}};
+  const INFO = {"bhr": {"title": "Bhramari (bee breath)", "html": "<h3>Benefits</h3><ul><li>Humming raises nasal nitric oxide about <b>15-fold</b> compared with quietly breathing out. The vibration pumps air in and out of the sinuses, improving their ventilation.</li><li>A long, slow, hummed exhale shifts you towards the calming (parasympathetic) side. Small studies report lower heart rate and blood pressure after practice.</li><li>The sound and vibration give a strong point of focus. Many people find it calming and helpful before sleep.</li><li><b>On pitch:</b> there's no good evidence that any particular frequency is better. A steady, comfortable hum matters more than the exact Hz, and this page's real value is helping you stay consistent.</li><li><span class=\"ev\">Evidence: the humming and NO finding is solid lab physiology. For bhramari's health effects, a systematic review found only 6 studies, none randomised, all very low quality. The results are encouraging but unproven.</span></li></ul><h3>Oxygen (O₂)</h3><ul><li>At rest your blood is already about 95–99% saturated with oxygen. Slow breathing doesn't push that higher in healthy people. The claim that humming significantly boosts blood oxygen isn't established.</li></ul><h3>Carbon dioxide (CO₂)</h3><ul><li>Long hummed exhales slow your breathing rate, so CO₂ stays at or slightly above normal. You're not hyperventilating, as long as you don't gulp big, fast inhales between hums.</li><li>Slightly higher CO₂ helps haemoglobin release oxygen into tissues (the Bohr effect) and widens blood vessels in the brain.</li></ul><h3>Nitric oxide (NO)</h3><ul><li>This is the highest-NO practice of the set. During the hum, NO-rich air from the sinuses is flushed into the nose and out.</li><li>The main established effect is better sinus ventilation and higher nasal NO. Inhale through the nose afterwards to bring some of it into your lungs.</li><li>Breathing in through the nose between hums carries nasal NO into the lungs, where it relaxes blood vessels. Mouth breathing skips this.</li></ul><h3>Sources</h3><ul class=\"src\"><li><a href=\"https://pubmed.ncbi.nlm.nih.gov/12119224/\" target=\"_blank\" rel=\"noopener\">Weitzberg &amp; Lundberg 2002, Am J Respir Crit Care Med</a></li><li><a href=\"https://sources.mandala.library.virginia.edu/node/85461\" target=\"_blank\" rel=\"noopener\">Effects of Bhramari Pranayama on health: a systematic review</a></li><li><a href=\"https://doaj.org/article/1fe298f698cb4ffe84a70f0adfc49765\" target=\"_blank\" rel=\"noopener\">Garg et al. 2023 meta-analysis, Int J Cardiol Cardiovasc Risk Prev</a></li></ul><p class=\"src\">General information, not medical advice. Stop if you feel dizzy, tingly or strained.</p>"}};
   const infoContent = () => INFO.bhr;
 
   // ---------- info overlay ----------
@@ -395,8 +406,10 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
   $('infoClose').onclick = () => dlg.close();
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
   addEventListener('resize', resize);
+  if (!('vibrate' in navigator)) $('buzz').closest('label').hidden = true;   // e.g. iPhone
   drawGauge(null); resize();
 })();
 </script>
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>

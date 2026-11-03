@@ -1,8 +1,9 @@
 # Frequency Scope
 
-Three pages:
+**Prana Tools** is an installable web app (PWA) for Android and iPhone that works offline.
 
-- `index.html`: real-time spectrum analyzer
+- `index.html`: launcher
+- `spectrum.html`: real-time spectrum analyzer
 - `bhramari.html`: Bhramari (bee breath) coach that keeps your humming pitch inside a target range
 - `pacer.html`: timed breathing pacer (box 1:1:1:1, 1:4:2:1, custom) with visual guide and sound cues. Links: `#box`, `#1-4-2-1`, `#custom`
 
@@ -16,7 +17,14 @@ A real-time audio frequency analyzer that runs in the browser. It listens to the
 
 It is a single `index.html` with no build step and no dependencies (Google Fonts only, with system fallbacks).
 
-## Running it
+## Installing
+
+Open https://maniacalk.github.io/frequency-scope/ on the phone.
+
+- **Android (Chrome):** use the Install button on the home page, or ⋮ → Install app.
+- **iPhone (Safari):** tap Share → Add to Home Screen.
+
+## Running it locally
 
 The microphone API only works in a secure context (HTTPS or `localhost`). Opening the file from disk usually won't work on a phone.
 

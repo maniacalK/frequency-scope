@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- pwa -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0e0c" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prana">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- /pwa -->
 <title>Breath Pacer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -86,7 +97,7 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
 <body>
 <header>
   <div class="title-row"><h1>Breath <span>Pacer</span></h1><button class="info-btn" id="infoBtn" aria-label="About this practice" title="About this practice">i</button></div>
-  <nav><a href="bhramari.html">Bhramari</a><a href="./">Spectrum</a></nav>
+  <nav><a href="./">Home</a><a href="bhramari.html">Bhramari</a></nav>
 </header>
 
 <section class="panel seg" role="group" aria-label="Pattern">
@@ -189,7 +200,19 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
 
   // ---------- audio ----------
   let ac, master;
+  // iOS: Web Audio is muted by the silent switch unless the page's audio session is 'playback'.
+  // Newer Safari exposes navigator.audioSession; older iOS needs an <audio> element playing (silence).
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  let keepAlive = null;
+  function iosAudioOn() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    if (!IOS) return;
+    if (!keepAlive) { keepAlive = new Audio('data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA=='); keepAlive.loop = true; keepAlive.setAttribute('playsinline', ''); }
+    keepAlive.play().catch(() => {});
+  }
+  function iosAudioOff() { try { keepAlive?.pause(); } catch {} }
   function ensureAudio() {
+    iosAudioOn();
     if (ac) return;
     ac = new (window.AudioContext || window.webkitAudioContext)();
     master = ac.createGain(); master.gain.value = set.vol; master.connect(ac.destination);
@@ -261,12 +284,13 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
     requestAnimationFrame(loop);
   }
   async function pause() {
-    state = 'paused'; clearInterval(schedTimer); await ac.suspend();
+    state = 'paused'; clearInterval(schedTimer); await ac.suspend(); iosAudioOff();
     $('startBtn').textContent = 'Resume'; try { wakeLock?.release(); } catch {}
   }
   async function reset() {
     clearInterval(schedTimer);
     if (ac) { await ac.close(); ac = null; }   // drops any cues already scheduled
+    iosAudioOff();
     state = 'idle'; $('startBtn').textContent = 'Start'; try { wakeLock?.release(); } catch {}
     ps = phases(); C = cycleLen(ps); T0 = 0; endAt = Infinity;
     $('phase').textContent = 'Ready'; $('count').innerHTML = '&nbsp;'; $('next').textContent = 'Press Start';
@@ -276,7 +300,7 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
     draw(null);
   }
   function finish() {
-    clearInterval(schedTimer); state = 'done';
+    clearInterval(schedTimer); state = 'done'; setTimeout(iosAudioOff, 2500);
     $('startBtn').textContent = 'Start'; try { wakeLock?.release(); } catch {}
     $('phase').textContent = 'Done'; $('count').innerHTML = '&nbsp;';
     $('next').textContent = `${Math.round((endAt - T0) / C)} rounds · ${fmtT(endAt - T0)}`;
@@ -376,8 +400,10 @@ dialog.info::backdrop{background:rgba(0,0,0,.55)}
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
   addEventListener('resize', resize);
 
+  if (!('vibrate' in navigator)) $('vibrate').closest('label').hidden = true;   // e.g. iPhone
   syncUI(); reset(); resize();
 })();
 </script>
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>
