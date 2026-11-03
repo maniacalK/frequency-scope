@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Frequency Scope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Instrument-panel layout: readout strip on top, full-width spectrum, peak table below */
+:root{
+  --bg:#eef1f3; --panel:#ffffff; --fg:#14191d; --muted:#5c6770; --line:#d5dbe0;
+  --trace:#0a7f6f; --hold:#c2410c; --grid:#e3e8ec;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0c1013; --panel:#141a1f; --fg:#e6ecef; --muted:#8a979f; --line:#26313a;
+  --trace:#3ee0c3; --hold:#ff8a4c; --grid:#1c252c; color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);
+  padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:12px;max-width:1100px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:600 16px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:0}
+.btns{display:flex;gap:8px}
+button{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--fg);
+  padding:9px 16px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--trace);border-color:var(--trace);color:var(--bg);font-weight:600}
+button:focus-visible{outline:2px solid var(--trace);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+.readout{display:grid;grid-template-columns:2fr 1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.cell{background:var(--panel);padding:10px 14px;min-width:0}
+.lbl{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.val{font:600 34px/1.15 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.val small{font-size:15px;font-weight:500;color:var(--muted);margin-left:4px}
+.val.sm{font-size:22px}
+.cents{font:500 12px var(--mono);color:var(--muted)}
+.scope{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;height:min(52vh,420px);min-height:240px;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--muted)}
+.peaks{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font:14px var(--mono);font-variant-numeric:tabular-nums}
+th,td{padding:7px 14px;text-align:right;border-bottom:1px solid var(--grid)}
+th{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+.opts{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px;align-items:center}
+.opts label{display:flex;gap:6px;align-items:center}
+select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+.note{color:var(--muted);font-size:12px;max-width:70ch}
+@media (max-width:520px){
+  .readout{grid-template-columns:1fr 1fr}
+  .readout .cell:first-child{grid-column:1/-1}
+  .val{font-size:30px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Frequency Scope</h1>
+  <div class="btns">
+    <button id="holdBtn" disabled>Freeze</button>
+    <button id="startBtn" class="primary">Start mic</button>
+  </div>
+</header>
+
+<section class="readout" aria-live="polite">
+  <div class="cell">
+    <div class="lbl">Dominant frequency</div>
+    <div class="val" id="freq">—<small>Hz</small></div>
+  </div>
+  <div class="cell">
+    <div class="lbl">Note</div>
+    <div class="val sm" id="note">—</div>
+    <div class="cents" id="cents">&nbsp;</div>
+  </div>
+  <div class="cell">
+    <div class="lbl">Level</div>
+    <div class="val sm" id="level">—<small>dBFS</small></div>
+    <div class="cents" id="peakLvl">&nbsp;</div>
+  </div>
+</section>
+
+<section class="scope" id="scope">
+  <canvas id="cv"></canvas>
+  <div class="msg" id="msg">Tap <b>&nbsp;Start mic&nbsp;</b> and allow microphone access.<br>Tap or drag on the graph to read any frequency.</div>
+</section>
+
+<section class="opts">
+  <label>Resolution
+    <select id="fft">
+      <option value="4096">4096 (fast)</option>
+      <option value="8192">8192</option>
+      <option value="16384" selected>16384 (fine)</option>
+      <option value="32768">32768 (finest)</option>
+    </select>
+  </label>
+  <label>Smoothing
+    <select id="smooth">
+      <option value="0">Off</option>
+      <option value="0.5" selected>Medium</option>
+      <option value="0.8">High</option>
+    </select>
+  </label>
+  <label><input type="checkbox" id="holdChk" checked> Peak hold</label>
+  <button id="resetBtn" style="padding:4px 10px;font-size:13px">Clear peaks</button>
+</section>
+
+<section class="peaks">
+  <table>
+    <thead><tr><th>Top peaks</th><th>Frequency</th><th>Note</th><th>Level</th></tr></thead>
+    <tbody id="peakRows"><tr><td colspan="4" style="text-align:left;color:var(--muted)">Waiting for audio…</td></tr></tbody>
+  </table>
+</section>
+
+<p class="note">Levels are dBFS (relative to the mic's full scale), not calibrated SPL. Phone mics roll off below ~50&nbsp;Hz and above ~16&nbsp;kHz, and some browsers keep filtering even when asked not to.</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const NOTES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const FMIN = 20, DBMIN = -110, DBMAX = -10;
+  let ac, analyser, stream, freqData, timeData, holdData, fmax = 20000;
+  let running = false, frozen = false, cursorX = null, wakeLock = null;
+
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const noteOf = f => {
+    const m = 69 + 12 * Math.log2(f / 440), r = Math.round(m);
+    return { name: NOTES[(r % 12 + 12) % 12] + (Math.floor(r / 12) - 1), cents: Math.round((m - r) * 100) };
+  };
+  const fmtF = f => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 2 : 3) + ' k' : f.toFixed(1);
+
+  function resize() {
+    const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+    cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    if (!running) drawGrid();
+  }
+  const PAD = { l: 40, r: 10, t: 10, b: 24 };
+  const geom = () => {
+    const w = cv.clientWidth, h = cv.clientHeight;
+    return { w, h, pw: w - PAD.l - PAD.r, ph: h - PAD.t - PAD.b };
+  };
+  const xOf = (f, g) => PAD.l + Math.log(f / FMIN) / Math.log(fmax / FMIN) * g.pw;
+  const fOfX = (x, g) => FMIN * Math.pow(fmax / FMIN, (x - PAD.l) / g.pw);
+  const yOf = (db, g) => PAD.t + (DBMAX - Math.max(DBMIN, Math.min(DBMAX, db))) / (DBMAX - DBMIN) * g.ph;
+
+  function drawGrid() {
+    const g = geom();
+    ctx.clearRect(0, 0, g.w, g.h);
+    ctx.font = '10px ' + css('--mono'); ctx.lineWidth = 1;
+    ctx.strokeStyle = css('--grid'); ctx.fillStyle = css('--muted');
+    ctx.textAlign = 'center';
+    [20,50,100,200,500,1000,2000,5000,10000,20000].filter(f => f <= fmax).forEach(f => {
+      const x = Math.round(xOf(f, g)) + .5;
+      ctx.beginPath(); ctx.moveTo(x, PAD.t); ctx.lineTo(x, PAD.t + g.ph); ctx.stroke();
+      ctx.fillText(f >= 1000 ? f / 1000 + 'k' : f, x, g.h - 8);
+    });
+    ctx.textAlign = 'right';
+    for (let db = -100; db <= -20; db += 20) {
+      const y = Math.round(yOf(db, g)) + .5;
+      ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l + g.pw, y); ctx.stroke();
+      ctx.fillText(db, PAD.l - 6, y + 3);
+    }
+  }
+
+  function trace(data, color, fill, g, binHz) {
+    ctx.beginPath();
+    let started = false, lastX = -1, maxDb = -Infinity;
+    for (let i = 1; i < data.length; i++) {
+      const f = i * binHz; if (f < FMIN) continue; if (f > fmax) break;
+      const x = xOf(f, g);
+      if (Math.floor(x) === lastX) { maxDb = Math.max(maxDb, data[i]); continue; }
+      if (lastX >= 0) { const y = yOf(maxDb, g); started ? ctx.lineTo(lastX, y) : (ctx.moveTo(lastX, y), started = true); }
+      lastX = Math.floor(x); maxDb = data[i];
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    if (fill) {
+      ctx.lineTo(lastX, PAD.t + g.ph); ctx.lineTo(PAD.l, PAD.t + g.ph); ctx.closePath();
+      ctx.globalAlpha = .14; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
+    }
+  }
+
+  // Parabolic interpolation around a bin (works on dB values) for sub-bin accuracy
+  const interp = (d, i) => {
+    const a = d[i - 1], b = d[i], c = d[i + 1], den = a - 2 * b + c;
+    const p = den === 0 ? 0 : .5 * (a - c) / den;
+    return { off: Math.max(-.5, Math.min(.5, p)), db: b - .25 * (a - c) * p };
+  };
+
+  function findPeaks(d, binHz) {
+    const lo = Math.max(2, Math.ceil(FMIN / binHz)), hi = Math.min(d.length - 2, Math.floor(fmax / binHz));
+    const floor = -90, cands = [];
+    for (let i = lo; i <= hi; i++) {
+      if (d[i] > floor && d[i] >= d[i - 1] && d[i] > d[i + 1]) {
+        const p = interp(d, i); cands.push({ f: (i + p.off) * binHz, db: p.db });
+      }
+    }
+    cands.sort((a, b) => b.db - a.db);
+    const out = [];
+    for (const c of cands) {
+      if (out.every(o => Math.abs(1200 * Math.log2(c.f / o.f)) > 60)) out.push(c);
+      if (out.length === 5) break;
+    }
+    return out;
+  }
+
+  function frame() {
+    if (!running) return;
+    requestAnimationFrame(frame);
+    if (frozen) return;
+    analyser.getFloatFrequencyData(freqData);
+    analyser.getFloatTimeDomainData(timeData);
+    const binHz = ac.sampleRate / analyser.fftSize;
+
+    if ($('holdChk').checked) for (let i = 0; i < freqData.length; i++)
+      holdData[i] = Math.max(freqData[i], holdData[i] - .25);
+
+    let sum = 0; for (let i = 0; i < timeData.length; i++) sum += timeData[i] * timeData[i];
+    const rms = 20 * Math.log10(Math.sqrt(sum / timeData.length) + 1e-12);
+    $('level').innerHTML = (rms < -120 ? '—' : rms.toFixed(1)) + '<small>dBFS</small>';
+
+    const peaks = findPeaks(freqData, binHz);
+    if (peaks.length) {
+      const p = peaks[0], n = noteOf(p.f);
+      $('freq').innerHTML = fmtF(p.f) + '<small>Hz</small>';
+      $('note').textContent = n.name;
+      $('cents').textContent = (n.cents >= 0 ? '+' : '') + n.cents + ' cents';
+      $('peakLvl').textContent = 'peak ' + p.db.toFixed(1) + ' dB';
+      $('peakRows').innerHTML = peaks.map((q, i) => {
+        const m = noteOf(q.f);
+        return `<tr><td>${i + 1}</td><td>${fmtF(q.f)} Hz</td><td>${m.name} ${m.cents >= 0 ? '+' : ''}${m.cents}¢</td><td>${q.db.toFixed(1)} dB</td></tr>`;
+      }).join('');
+    } else {
+      $('freq').innerHTML = '—<small>Hz</small>'; $('note').textContent = '—';
+      $('cents').innerHTML = '&nbsp;'; $('peakLvl').textContent = 'below threshold';
+      $('peakRows').innerHTML = '<tr><td colspan="4" style="text-align:left;color:var(--muted)">Nothing above −90 dB</td></tr>';
+    }
+
+    const g = geom();
+    drawGrid();
+    if ($('holdChk').checked) trace(holdData, css('--hold'), false, g, binHz);
+    trace(freqData, css('--trace'), true, g, binHz);
+
+    if (peaks.length) {
+      const x = xOf(peaks[0].f, g), y = yOf(peaks[0].db, g);
+      ctx.fillStyle = css('--trace'); ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
+    }
+    if (cursorX !== null) {
+      const f = fOfX(cursorX, g), i = Math.round(f / binHz), db = freqData[i] ?? DBMIN;
+      ctx.strokeStyle = css('--fg'); ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(cursorX, PAD.t); ctx.lineTo(cursorX, PAD.t + g.ph); ctx.stroke(); ctx.setLineDash([]);
+      const label = `${fmtF(f)} Hz  ${db.toFixed(1)} dB`;
+      ctx.font = '12px ' + css('--mono');
+      const tw = ctx.measureText(label).width + 12;
+      const bx = Math.min(Math.max(cursorX - tw / 2, PAD.l), PAD.l + g.pw - tw);
+      ctx.fillStyle = css('--panel'); ctx.fillRect(bx, PAD.t + 2, tw, 20);
+      ctx.strokeStyle = css('--line'); ctx.strokeRect(bx + .5, PAD.t + 2.5, tw, 20);
+      ctx.fillStyle = css('--fg'); ctx.textAlign = 'left'; ctx.fillText(label, bx + 6, PAD.t + 16);
+    }
+  }
+
+  function applyFFT() {
+    if (!analyser) return;
+    analyser.fftSize = +$('fft').value;
+    freqData = new Float32Array(analyser.frequencyBinCount);
+    timeData = new Float32Array(analyser.fftSize);
+    holdData = new Float32Array(analyser.frequencyBinCount).fill(DBMIN);
+  }
+
+  async function start() {
+    if (running) return stop();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    } catch (e) {
+      $('msg').innerHTML = e.name === 'NotAllowedError'
+        ? 'Microphone access was blocked. Allow it in the browser\'s site settings, then tap Start again.'
+        : 'Could not open the microphone (' + e.name + '). This page must be served over HTTPS.';
+      return;
+    }
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    await ac.resume();
+    fmax = Math.min(20000, ac.sampleRate / 2);
+    analyser = ac.createAnalyser();
+    analyser.minDecibels = DBMIN; analyser.maxDecibels = DBMAX;
+    analyser.smoothingTimeConstant = +$('smooth').value;
+    applyFFT();
+    ac.createMediaStreamSource(stream).connect(analyser);
+    running = true; frozen = false;
+    $('msg').hidden = true;
+    $('startBtn').textContent = 'Stop'; $('holdBtn').disabled = false; $('holdBtn').textContent = 'Freeze';
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+    frame();
+  }
+
+  function stop() {
+    running = false;
+    stream?.getTracks().forEach(t => t.stop()); ac?.close();
+    try { wakeLock?.release(); } catch {}
+    $('startBtn').textContent = 'Start mic'; $('holdBtn').disabled = true;
+  }
+
+  $('startBtn').onclick = start;
+  $('holdBtn').onclick = () => { frozen = !frozen; $('holdBtn').textContent = frozen ? 'Resume' : 'Freeze'; };
+  $('fft').onchange = applyFFT;
+  $('smooth').onchange = () => analyser && (analyser.smoothingTimeConstant = +$('smooth').value);
+  $('resetBtn').onclick = () => holdData && holdData.fill(DBMIN);
+
+  const sc = $('scope');
+  const setCursor = e => { const r = cv.getBoundingClientRect(), g = geom();
+    cursorX = Math.min(Math.max(e.clientX - r.left, PAD.l), PAD.l + g.pw); };
+  sc.addEventListener('pointerdown', e => { setCursor(e); sc.setPointerCapture(e.pointerId); });
+  sc.addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'mouse') setCursor(e); });
+  sc.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') cursorX = null; });
+  sc.addEventListener('dblclick', () => cursorX = null);
+
+  addEventListener('resize', resize);
+  resize();
+})();
+</script>
+</body>
+</html>
