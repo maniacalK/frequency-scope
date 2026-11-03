@@ -71,11 +71,27 @@ th:first-child,td:first-child{text-align:left}
 tr:last-child td{border-bottom:0}
 td.empty{font:13px var(--sans);color:var(--muted);white-space:normal;text-align:left}
 .note-text{color:var(--muted);font-size:12px;max-width:70ch;margin:0}
+
+.info-btn{width:30px;height:30px;padding:0;border-radius:50%;font:600 15px/1 var(--mono);display:inline-flex;align-items:center;justify-content:center;color:var(--accent);border-color:var(--accent)}
+.title-row{display:flex;align-items:center;gap:10px}
+dialog.info{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--fg);padding:0;width:min(580px,calc(100vw - 24px));max-height:86vh;overflow:hidden}
+dialog.info[open]{display:flex;flex-direction:column}
+dialog.info::backdrop{background:rgba(0,0,0,.55)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dlg-head h2{font:600 17px/1.2 var(--sans);margin:0;text-wrap:balance}
+.dlg-head button{padding:4px 12px;font-size:20px;line-height:1}
+.dlg-body{overflow-y:auto;padding:6px 18px 18px;font-size:14px;line-height:1.5}
+.dlg-body h3{font:600 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:18px 0 6px}
+.dlg-body ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.dlg-body .ev{color:var(--muted);font-size:12.5px}
+.dlg-body .src{color:var(--muted);font-size:12px}
+.dlg-body .src a{color:var(--muted)}
+.dlg-body .caution{border-left:3px solid var(--accent);padding:6px 10px;background:var(--grid);border-radius:4px;margin-top:4px}
 </style>
 </head>
 <body>
 <header>
-  <h1>Bhramari <span>Coach</span></h1>
+  <div class="title-row"><h1>Bhramari <span>Coach</span></h1><button class="info-btn" id="infoBtn" aria-label="About this practice" title="About this practice">i</button></div>
   <nav style="display:flex;gap:12px"><a href="pacer.html">Breath pacer</a><a href="./">Spectrum</a></nav>
 </header>
 
@@ -123,6 +139,11 @@ td.empty{font:13px var(--sans);color:var(--muted);white-space:normal;text-align:
 
 <p class="note-text">Pitch is measured from the waveform itself (autocorrelation), so it tracks the note you're humming rather than its louder overtones. Keep the phone 20–50 cm away and steady; a quiet room helps. "Set from my hum": hum comfortably for 3 seconds and the target becomes that pitch ±5%.</p>
 
+
+<dialog class="info" id="infoDlg" aria-labelledby="infoTitle">
+  <div class="dlg-head"><h2 id="infoTitle"></h2><button id="infoClose" aria-label="Close">×</button></div>
+  <div class="dlg-body" id="infoBody"></div>
+</dialog>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -365,6 +386,14 @@ td.empty{font:13px var(--sans);color:var(--muted);white-space:normal;text-align:
   document.addEventListener('visibilitychange', async () => {
     if (running && document.visibilityState === 'visible') try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
   });
+  const INFO = {"bhr": {"title": "Bhramari (bee breath)", "html": "<h3>Benefits</h3><ul><li>Humming raises nasal nitric oxide about <b>15-fold</b> compared with quietly breathing out. The vibration pumps air in and out of the sinuses, improving their ventilation.</li><li>A long, slow, hummed exhale shifts you towards the calming (parasympathetic) side. Small studies report lower heart rate and blood pressure after practice.</li><li>The sound and vibration give a strong point of focus. Many people find it calming and helpful before sleep.</li><li><b>On pitch:</b> there's no good evidence that any particular frequency is better. A steady, comfortable hum matters more than the exact Hz, and this page's real value is helping you stay consistent.</li><li><span class=\"ev\">Evidence: the humming and NO finding is solid lab physiology. For bhramari's health effects, a systematic review found only 6 studies, none randomised, all very low quality. The results are encouraging but unproven.</span></li></ul><h3>Oxygen (O₂)</h3><ul><li>At rest your blood is already about 95–99% saturated with oxygen. Slow breathing doesn't push that higher in healthy people. The claim that humming significantly boosts blood oxygen isn't established.</li></ul><h3>Carbon dioxide (CO₂)</h3><ul><li>Long hummed exhales slow your breathing rate, so CO₂ stays at or slightly above normal. You're not hyperventilating, as long as you don't gulp big, fast inhales between hums.</li><li>Slightly higher CO₂ helps haemoglobin release oxygen into tissues (the Bohr effect) and widens blood vessels in the brain.</li></ul><h3>Nitric oxide (NO)</h3><ul><li>This is the highest-NO practice of the set. During the hum, NO-rich air from the sinuses is flushed into the nose and out.</li><li>The main established effect is better sinus ventilation and higher nasal NO. Inhale through the nose afterwards to bring some of it into your lungs.</li><li>Your nose and sinuses constantly make nitric oxide (NO).</li></ul><h3>Sources</h3><ul class=\"src\"><li><a href=\"https://pubmed.ncbi.nlm.nih.gov/12119224/\" target=\"_blank\" rel=\"noopener\">Weitzberg &amp; Lundberg 2002, Am J Respir Crit Care Med</a></li><li><a href=\"https://sources.mandala.library.virginia.edu/node/85461\" target=\"_blank\" rel=\"noopener\">Effects of Bhramari Pranayama on health: a systematic review</a></li><li><a href=\"https://doaj.org/article/1fe298f698cb4ffe84a70f0adfc49765\" target=\"_blank\" rel=\"noopener\">Garg et al. 2023 meta-analysis, Int J Cardiol Cardiovasc Risk Prev</a></li></ul><p class=\"src\">General information, not medical advice. Stop if you feel dizzy, tingly or strained.</p>"}};
+  const infoContent = () => INFO.bhr;
+
+  // ---------- info overlay ----------
+  const dlg = $('infoDlg');
+  $('infoBtn').onclick = () => { const c = infoContent(); $('infoTitle').textContent = c.title; $('infoBody').innerHTML = c.html; dlg.showModal(); $('infoBody').scrollTop = 0; };
+  $('infoClose').onclick = () => dlg.close();
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
   addEventListener('resize', resize);
   drawGauge(null); resize();
 })();

@@ -56,6 +56,16 @@ A timed pranayama pacer: Box (1:1:1:1), 1:4:2:1 and Custom ratios, multiplied by
 - **Session:** a length in minutes (0 = open-ended) that always finishes its last full round, with elapsed, rounds and remaining stats, plus optional vibration on phase change. Settings are saved under `bp-set`, with the time unit stored per pattern.
 - **Tested:** Node simulation of the scheduler (exact boundaries, no duplicate cues, correct end time for box, 1:4:2:1 and no-hold patterns) and a headless Chrome render at 390px. Not yet tried by Mike on a phone.
 
+## Info overlays (pacer.html, bhramari.html)
+
+Each page has an "i" button that opens a `<dialog>` with bullet points per practice: benefits, oxygen, CO₂, nitric oxide, a caution (on 1:4:2:1), and sources. On the pacer the content follows the selected pattern (box, ratio or custom), stored in an `INFO` object in each page's script. The content deliberately states evidence quality honestly:
+- Box breathing didn't beat mindfulness in Balban 2023.
+- Bhramari's systematic review covered 6 non-randomised, very-low-quality studies.
+- There is no evidence for an "optimal" humming pitch.
+- Slow breathing doesn't raise SpO₂ in healthy people.
+- Humming raises nasal NO about 15× (Weitzberg & Lundberg 2002).
+Keep that standard when editing.
+
 ## Possible next steps (not yet requested)
 
 - 1/3-octave band view (bar mode)
