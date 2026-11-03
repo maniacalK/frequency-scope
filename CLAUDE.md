@@ -19,6 +19,8 @@ Mike (Kotlin/Android developer) looked at the Play Store app "Sound Spectrum Ana
 - Log-frequency spectrum on a canvas (20 Hz to min(20 kHz, Nyquist)), y axis −110 to −10 dB, with a peak-hold trace that decays 0.25 dB per frame.
 - Readout panel: dominant frequency, note and cents, RMS level in dBFS, peak dB.
 - Top-5 peaks table: local maxima above −90 dB, parabolic interpolation, 60-cent separation.
+- "Number updates" selector (Live / 4 per sec / 2 per sec, the default / 1 per sec), remembered in localStorage. In the slower modes, power is averaged per bin and RMS over the interval, and peaks are found on the averaged spectrum. The graph always stays live.
+- Peaks table always has five fixed rows (dashes when empty) so the layout never jumps.
 - Tap/drag cursor readout, Freeze/Resume, FFT size selector, smoothing selector, peak-hold toggle and Clear peaks.
 - Screen wake lock while running. Light and dark themes via CSS tokens.
 
@@ -29,7 +31,6 @@ The code passes a syntax check. It has **not yet been tested on a real device** 
 ## Possible next steps (not yet requested)
 
 - 1/3-octave band view (bar mode)
-- Slower or averaged level readout (fast/slow response times)
 - A/C weighting
 - Per-band calibration offsets, or importing a mic calibration file (e.g. Dayton iMM-6)
 - Snapshot/export (PNG or CSV)

@@ -106,6 +106,14 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
       <option value="0.8">High</option>
     </select>
   </label>
+  <label>Number updates
+    <select id="rate">
+      <option value="0">Live (every frame)</option>
+      <option value="250">Fast (4 per sec)</option>
+      <option value="500" selected>Slow (2 per sec)</option>
+      <option value="1000">Very slow (1 per sec)</option>
+    </select>
+  </label>
   <label><input type="checkbox" id="holdChk" checked> Peak hold</label>
   <button id="resetBtn" style="padding:4px 10px;font-size:13px">Clear peaks</button>
 </section>
@@ -127,6 +135,7 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
   const FMIN = 20, DBMIN = -110, DBMAX = -10;
   let ac, analyser, stream, freqData, timeData, holdData, fmax = 20000;
   let running = false, frozen = false, cursorX = null, wakeLock = null;
+  let avgDb; const acc = { pow: new Float64Array(0), ms: 0, n: 0, t: 0 };
 
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const noteOf = f => {
@@ -241,11 +250,24 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
     if ($('holdChk').checked) for (let i = 0; i < freqData.length; i++)
       holdData[i] = Math.max(freqData[i], holdData[i] - .25);
 
+    // Accumulate power so slow mode reports an average over the interval, not one snapshot
     let sum = 0; for (let i = 0; i < timeData.length; i++) sum += timeData[i] * timeData[i];
-    const rms = 20 * Math.log10(Math.sqrt(sum / timeData.length) + 1e-12);
-    $('level').innerHTML = (rms < -120 ? '—' : rms.toFixed(1)) + '<small>dBFS</small>';
+    acc.ms += sum / timeData.length;
+    for (let i = 0; i < freqData.length; i++) acc.pow[i] += Math.pow(10, freqData[i] / 10);
+    acc.n++;
 
-    const peaks = findPeaks(freqData, binHz);
+    const livePeaks = findPeaks(freqData, binHz);
+    const now = performance.now(), interval = +$('rate').value;
+    if (now - acc.t >= interval) {
+      for (let i = 0; i < avgDb.length; i++) avgDb[i] = 10 * Math.log10(acc.pow[i] / acc.n + 1e-20);
+      updateNumbers(findPeaks(avgDb, binHz), 10 * Math.log10(acc.ms / acc.n + 1e-24));
+      resetAcc(now);
+    }
+    drawSpectrum(livePeaks, binHz);
+  }
+
+  function updateNumbers(peaks, rms) {
+    $('level').innerHTML = (rms < -120 ? '—' : rms.toFixed(1)) + '<small>dBFS</small>';
     if (peaks.length) {
       const p = peaks[0], n = noteOf(p.f);
       $('freq').innerHTML = fmtF(p.f) + '<small>Hz</small>';
@@ -257,7 +279,9 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
       $('cents').innerHTML = '&nbsp;'; $('peakLvl').textContent = 'below threshold';
     }
     renderPeaks(peaks);
+  }
 
+  function drawSpectrum(peaks, binHz) {
     const g = geom();
     drawGrid();
     if ($('holdChk').checked) trace(holdData, css('--hold'), false, g, binHz);
@@ -287,7 +311,12 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
     freqData = new Float32Array(analyser.frequencyBinCount);
     timeData = new Float32Array(analyser.fftSize);
     holdData = new Float32Array(analyser.frequencyBinCount).fill(DBMIN);
+    avgDb = new Float32Array(analyser.frequencyBinCount);
+    acc.pow = new Float64Array(analyser.frequencyBinCount);
+    resetAcc(performance.now());
   }
+
+  function resetAcc(t) { acc.pow.fill(0); acc.ms = 0; acc.n = 0; acc.t = t; }
 
   async function start() {
     if (running) return stop();
@@ -326,6 +355,11 @@ select{font:13px var(--sans);background:var(--panel);color:var(--fg);border:1px 
   $('holdBtn').onclick = () => { frozen = !frozen; $('holdBtn').textContent = frozen ? 'Resume' : 'Freeze'; };
   $('fft').onchange = applyFFT;
   $('smooth').onchange = () => analyser && (analyser.smoothingTimeConstant = +$('smooth').value);
+  try { const r = localStorage.getItem('fs-rate'); if (r !== null) $('rate').value = r; } catch {}
+  $('rate').onchange = () => {
+    try { localStorage.setItem('fs-rate', $('rate').value); } catch {}
+    resetAcc(performance.now());
+  };
   $('resetBtn').onclick = () => holdData && holdData.fill(DBMIN);
 
   const sc = $('scope');
