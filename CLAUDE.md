@@ -45,6 +45,17 @@ Mike's actual goal: a coach for Bhramari pranayama (bee breath) that keeps his h
 - **Known tension:** Bhramari is traditionally done with eyes closed and ears closed with the thumbs, so visual feedback only helps with eyes open. Vibration may be picked up by the mic.
 - **Tested** with Node unit tests on synthetic hums whose harmonics are louder than the fundamental, and end to end in headless Chrome using a WAV as the fake mic (`--use-file-for-fake-audio-capture`). Not yet tested by Mike on a real phone.
 
+## Breath Pacer (pacer.html)
+
+A timed pranayama pacer: Box (1:1:1:1), 1:4:2:1 and Custom ratios, multiplied by a "time unit" in seconds. Phases with zero length are skipped. Each pattern is bookmarkable as `#box`, `#1-4-2-1` or `#custom`.
+
+- **No breath detection, deliberately.** A phone mic can't reliably hear quiet nasal breathing or tell an inhale from an exhale, so Mike chose the timed pacer.
+- **Timing runs on the AudioContext clock.** Cues are scheduled 3 s ahead every 250 ms, so they stay sample-accurate even when timers are throttled. Pause suspends the context, which freezes its clock. Reset closes the context to drop any cues already scheduled.
+- **Sound cues:** one high bell (E5) to inhale, two soft mid bells (D5) for either hold, one low bell (B4) to exhale, and three descending bells at the end. Sound and generation are fine on this page; the "detection only" rule applies to the spectrum analyzer.
+- **Visual:** a ring split into phase arcs with a moving marker, plus a "lung" circle that grows on inhale and shrinks on exhale. The centre shows the phase name, a seconds countdown and the next phase.
+- **Session:** a length in minutes (0 = open-ended) that always finishes its last full round, with elapsed, rounds and remaining stats, plus optional vibration on phase change. Settings are saved under `bp-set`, with the time unit stored per pattern.
+- **Tested:** Node simulation of the scheduler (exact boundaries, no duplicate cues, correct end time for box, 1:4:2:1 and no-hold patterns) and a headless Chrome render at 390px. Not yet tried by Mike on a phone.
+
 ## Possible next steps (not yet requested)
 
 - 1/3-octave band view (bar mode)

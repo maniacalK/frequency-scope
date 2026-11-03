@@ -1,9 +1,10 @@
 # Frequency Scope
 
-Two pages:
+Three pages:
 
 - `index.html`: real-time spectrum analyzer
 - `bhramari.html`: Bhramari (bee breath) coach that keeps your humming pitch inside a target range
+- `pacer.html`: timed breathing pacer (box 1:1:1:1, 1:4:2:1, custom) with visual guide and sound cues. Links: `#box`, `#1-4-2-1`, `#custom`
 
 A real-time audio frequency analyzer that runs in the browser. It listens to the microphone and shows:
 

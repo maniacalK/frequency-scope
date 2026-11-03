@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Breath Pacer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Single column: pattern picker, breathing ring (phase arcs + lung circle), controls, settings */
+:root{
+  --bg:#f1f2ef; --panel:#ffffff; --fg:#191b18; --muted:#666b63; --line:#d8dbd4; --grid:#e9ebe6;
+  --accent:#b07800;
+  --in:#1f8a6e; --hold:#b07800; --out:#3b6fc4; --rest:#8a8f86;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f0e0c; --panel:#18170f; --fg:#ece8dc; --muted:#9a9483; --line:#2d2b22; --grid:#221f18;
+  --accent:#f2b632; --in:#45d6a8; --hold:#f2b632; --out:#79a8ff; --rest:#8d8878; color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);
+  padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:12px;max-width:620px;margin:0 auto}
+body>*{flex-shrink:0}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+h1{font:600 16px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:0}
+h1 span{color:var(--accent)}
+nav{display:flex;gap:12px}
+nav a{color:var(--muted);font-size:13px}
+button{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:9px 16px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600;min-width:7em}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.lbl{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:8px 6px}
+.seg button[aria-pressed=true]{background:var(--grid);color:var(--fg);font-weight:600}
+
+.summary{font:500 13px var(--mono);color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.summary b{font-weight:600}
+
+.stage{position:relative;aspect-ratio:1;width:100%;max-width:380px;margin:0 auto}
+.stage canvas{display:block;width:100%;height:100%}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
+.phase{font:600 30px/1.1 var(--sans);letter-spacing:.01em}
+.count{font:600 56px/1 var(--mono);font-variant-numeric:tabular-nums;margin-top:4px}
+.next{font:500 13px var(--sans);color:var(--muted);margin-top:6px;min-height:1.4em}
+
+.controls{display:flex;gap:10px;justify-content:center}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--panel);padding:10px 12px;min-width:0}
+.stat b{display:block;font:600 20px/1.2 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.settings{padding:12px 16px;display:flex;flex-direction:column;gap:12px;color:var(--muted);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.row label{display:flex;gap:6px;align-items:center}
+input[type=number]{width:4.5em;font:14px var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+input[type=range]{width:110px;accent-color:var(--accent)}
+.ratio{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ratio label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.ratio input{width:100%}
+.note-text{color:var(--muted);font-size:12px;max-width:70ch;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Breath <span>Pacer</span></h1>
+  <nav><a href="bhramari.html">Bhramari</a><a href="./">Spectrum</a></nav>
+</header>
+
+<section class="panel seg" role="group" aria-label="Pattern">
+  <button data-p="box" aria-pressed="true">Box 1:1:1:1</button>
+  <button data-p="ratio" aria-pressed="false">1:4:2:1</button>
+  <button data-p="custom" aria-pressed="false">Custom</button>
+</section>
+
+<div class="summary" id="summary"></div>
+
+<section class="stage">
+  <canvas id="cv"></canvas>
+  <div class="center" aria-live="polite">
+    <div class="phase" id="phase">Ready</div>
+    <div class="count" id="count">&nbsp;</div>
+    <div class="next" id="next">Press Start</div>
+  </div>
+</section>
+
+<div class="controls">
+  <button id="resetBtn">Reset</button>
+  <button id="startBtn" class="primary">Start</button>
+</div>
+
+<section class="stats">
+  <div class="stat"><span class="lbl">Elapsed</span><b id="sEl">0:00</b></div>
+  <div class="stat"><span class="lbl">Rounds</span><b id="sRounds">0</b></div>
+  <div class="stat"><span class="lbl">Remaining</span><b id="sRem">—</b></div>
+</section>
+
+<section class="panel settings">
+  <div class="row">
+    <label>Time unit <input type="number" id="unit" inputmode="decimal" min="0.5" max="30" step="0.5" value="4"> s</label>
+    <label>Session <input type="number" id="minutes" inputmode="numeric" min="0" max="120" step="1" value="5"> min</label>
+  </div>
+  <div class="ratio" id="customBox" hidden>
+    <label>Inhale<input type="number" id="c0" min="0" step="0.5" value="1"></label>
+    <label>Hold<input type="number" id="c1" min="0" step="0.5" value="1"></label>
+    <label>Exhale<input type="number" id="c2" min="0" step="0.5" value="2"></label>
+    <label>Hold<input type="number" id="c3" min="0" step="0.5" value="0"></label>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="sound" checked> Sound</label>
+    <label>Volume <input type="range" id="vol" min="0.05" max="1" step="0.05" value="0.5"></label>
+    <label><input type="checkbox" id="vibrate"> Vibrate</label>
+  </div>
+</section>
+
+<p class="note-text">Sounds: one high ding to inhale, two soft mid dings to hold, one low ding to exhale, three descending dings when the session ends. You can follow along with your eyes closed. Session 0 runs until you stop. The session always finishes its last full round. Changing settings resets the session.</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmtT = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const PATTERNS = { box: [1, 1, 1, 1], ratio: [1, 4, 2, 1] };
+  const NAMES = ['Inhale', 'Hold', 'Exhale', 'Hold'];
+  const COLORS = ['--in', '--hold', '--out', '--rest'];
+  const NOTE = [659.26, 587.33, 493.88, 587.33];   // E5 inhale, D5 hold, B4 exhale
+
+  // ---------- settings ----------
+  let set = { pattern: 'box', units: { box: 4, ratio: 4, custom: 4 }, custom: [1, 1, 2, 0], minutes: 5, sound: true, vol: .5, vibrate: false };
+  try { const s = JSON.parse(localStorage.getItem('bp-set') || 'null'); if (s) set = { ...set, ...s, units: { ...set.units, ...s.units } }; } catch {}
+  const save = () => { try { localStorage.setItem('bp-set', JSON.stringify(set)); } catch {} };
+  const fromHash = () => { const h = location.hash.slice(1); if (h === 'box' || h === 'custom') return h; if (h === '1-4-2-1') return 'ratio'; return null; };
+  set.pattern = fromHash() || set.pattern;
+
+  function phases() {
+    const r = set.pattern === 'custom' ? set.custom : PATTERNS[set.pattern];
+    const u = Math.max(0.5, +set.units[set.pattern] || 4);
+    return r.map((x, i) => ({ i, name: NAMES[i], dur: Math.max(0, +x || 0) * u })).filter(p => p.dur > 0);
+  }
+  const cycleLen = ps => ps.reduce((a, p) => a + p.dur, 0);
+
+  function syncUI() {
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === set.pattern));
+    $('customBox').hidden = set.pattern !== 'custom';
+    $('unit').value = set.units[set.pattern];
+    $('minutes').value = set.minutes;
+    set.custom.forEach((v, i) => $('c' + i).value = v);
+    $('sound').checked = set.sound; $('vol').value = set.vol; $('vibrate').checked = set.vibrate;
+    const ps = phases(), c = cycleLen(ps);
+    $('summary').innerHTML = ps.length && c > 0
+      ? ps.map(p => `${p.name} <b>${+p.dur.toFixed(1)}s</b>`).join(' · ') + ` · round ${+c.toFixed(1)}s`
+      : 'Set at least one phase above zero.';
+    const hash = set.pattern === 'ratio' ? '#1-4-2-1' : '#' + set.pattern;
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+  }
+
+  // ---------- audio ----------
+  let ac, master;
+  function ensureAudio() {
+    if (ac) return;
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = set.vol; master.connect(ac.destination);
+  }
+  function bell(at, f, level = 1) {
+    // Soft bell: sine fundamental plus a quiet inharmonic partial, fast attack, long decay
+    [[f, .18], [f * 2.756, .035]].forEach(([fr, a]) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = fr;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(a * level, at + .012);
+      g.gain.exponentialRampToValueAtTime(.0001, at + 1.8);
+      o.connect(g); g.connect(master); o.start(at); o.stop(at + 1.9);
+    });
+  }
+  function cue(at, phaseIdx) {
+    if (!set.sound) return;
+    if (phaseIdx === 1 || phaseIdx === 3) { bell(at, NOTE[phaseIdx], .7); bell(at + .2, NOTE[phaseIdx], .55); }
+    else bell(at, NOTE[phaseIdx]);
+  }
+  function endChime(at) { if (set.sound) [784, 659.26, 523.25].forEach((f, k) => bell(at + k * .35, f, .9)); }
+
+  // ---------- session timeline (driven by the audio clock so cues stay exact) ----------
+  // All times are in AudioContext seconds. Pausing suspends the context, which freezes its clock.
+  let state = 'idle', T0 = 0, ps = [], C = 0, endAt = Infinity, schedUntil = 0, schedTimer, lastPhaseKey = '', wakeLock;
+  const LEAD = 1.5, LOOKAHEAD = 3;
+
+  function at(t) {           // where in the pattern is time t?
+    const e = t - T0;
+    if (e < 0) return { pre: true, left: -e };
+    if (e >= endAt - T0) return { done: true };
+    const round = Math.floor(e / C); let r = e - round * C;
+    for (const p of ps) { if (r < p.dur) return { round, p, into: r, left: p.dur - r }; r -= p.dur; }
+    return { round, p: ps[ps.length - 1], into: ps[ps.length - 1].dur, left: 0 };
+  }
+
+  function schedule() {
+    const horizon = ac.currentTime + LOOKAHEAD;
+    while (schedUntil < horizon) {
+      // next phase boundary strictly after schedUntil
+      const e = schedUntil - T0, round = Math.max(0, Math.floor(e / C));
+      let tb = T0 + round * C, found = false;
+      for (const p of ps) {
+        if (tb >= schedUntil - 1e-6 && tb < endAt - 1e-6) { cue(tb, p.i); schedUntil = tb + 1e-3; found = true; break; }
+        tb += p.dur;
+      }
+      if (!found) {
+        if (T0 + (round + 1) * C >= endAt - 1e-6) { if (isFinite(endAt) && schedUntil <= endAt) endChime(endAt); schedUntil = Infinity; }
+        else schedUntil = T0 + (round + 1) * C;
+      }
+    }
+  }
+
+  async function start() {
+    ps = phases(); C = cycleLen(ps);
+    if (!ps.length || C <= 0) return;
+    ensureAudio(); await ac.resume();
+    if (state === 'paused') { state = 'running'; afterResume(); return; }
+    T0 = ac.currentTime + LEAD;
+    const mins = Math.max(0, +set.minutes || 0);
+    endAt = mins ? T0 + Math.ceil(mins * 60 / C) * C : Infinity;
+    schedUntil = T0 - 1e-3; lastPhaseKey = '';
+    state = 'running'; afterResume();
+  }
+  async function afterResume() {
+    clearInterval(schedTimer); schedule(); schedTimer = setInterval(schedule, 250);
+    $('startBtn').textContent = 'Pause';
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+    requestAnimationFrame(loop);
+  }
+  async function pause() {
+    state = 'paused'; clearInterval(schedTimer); await ac.suspend();
+    $('startBtn').textContent = 'Resume'; try { wakeLock?.release(); } catch {}
+  }
+  async function reset() {
+    clearInterval(schedTimer);
+    if (ac) { await ac.close(); ac = null; }   // drops any cues already scheduled
+    state = 'idle'; $('startBtn').textContent = 'Start'; try { wakeLock?.release(); } catch {}
+    ps = phases(); C = cycleLen(ps); T0 = 0; endAt = Infinity;
+    $('phase').textContent = 'Ready'; $('count').innerHTML = '&nbsp;'; $('next').textContent = 'Press Start';
+    $('sEl').textContent = '0:00'; $('sRounds').textContent = '0';
+    const mins = +set.minutes || 0;
+    $('sRem').textContent = mins && C ? fmtT(Math.ceil(mins * 60 / C) * C) : '—';
+    draw(null);
+  }
+  function finish() {
+    clearInterval(schedTimer); state = 'done';
+    $('startBtn').textContent = 'Start'; try { wakeLock?.release(); } catch {}
+    $('phase').textContent = 'Done'; $('count').innerHTML = '&nbsp;';
+    $('next').textContent = `${Math.round((endAt - T0) / C)} rounds · ${fmtT(endAt - T0)}`;
+    $('sRem').textContent = '0:00'; draw(null);
+  }
+
+  // ---------- UI loop ----------
+  function loop() {
+    if (state !== 'running') return;
+    requestAnimationFrame(loop);
+    const t = ac.currentTime, s = at(t);
+    if (s.done) { finish(); return; }
+    if (s.pre) {
+      $('phase').textContent = 'Get ready'; $('count').textContent = Math.ceil(s.left);
+      $('next').textContent = 'Inhale first'; draw(null); return;
+    }
+    const key = s.round + ':' + s.p.i;
+    if (key !== lastPhaseKey) {
+      lastPhaseKey = key;
+      if (set.vibrate && navigator.vibrate) navigator.vibrate(s.p.i === 1 || s.p.i === 3 ? [40, 80, 40] : 70);
+      $('phase').textContent = s.p.name; $('phase').style.color = css(COLORS[s.p.i]);
+      const nx = ps[(ps.indexOf(s.p) + 1) % ps.length];
+      $('next').textContent = 'then ' + nx.name.toLowerCase() + ' ' + +nx.dur.toFixed(1) + 's';
+    }
+    $('count').textContent = Math.max(1, Math.ceil(s.left - 1e-3));
+    const el = t - T0;
+    $('sEl').textContent = fmtT(el); $('sRounds').textContent = s.round;
+    $('sRem').textContent = isFinite(endAt) ? fmtT(endAt - t) : '—';
+    draw(s);
+  }
+
+  // ---------- drawing: phase arcs around a ring, a marker, and a "lung" circle ----------
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  function resize() {
+    const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+    cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+    ctx.setTransform(d, 0, 0, d, 0, 0); draw(state === 'running' && ac ? at(ac.currentTime) : null);
+  }
+  const ease = x => .5 - .5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
+  function draw(s) {
+    const w = cv.clientWidth, h = cv.clientHeight, cx = w / 2, cy = h / 2, R = Math.min(w, h) * .44;
+    const list = ps.length ? ps : phases(), tot = cycleLen(list) || 1, gap = list.length > 1 ? .025 : 0;
+    ctx.clearRect(0, 0, w, h);
+    // ring segments
+    let a = -Math.PI / 2;
+    for (const p of list) {
+      const span = 2 * Math.PI * p.dur / tot;
+      ctx.beginPath(); ctx.arc(cx, cy, R, a + gap, a + span - gap);
+      ctx.strokeStyle = css(COLORS[p.i]); ctx.lineCap = 'round';
+      ctx.globalAlpha = s && s.p === p ? 1 : .35; ctx.lineWidth = s && s.p === p ? 10 : 6; ctx.stroke();
+      a += span;
+    }
+    ctx.globalAlpha = 1;
+    // lung circle: grows on inhale, full on hold, shrinks on exhale, small on hold-out
+    let vol = 0;
+    if (s && s.p) {
+      const x = s.into / s.p.dur;
+      vol = s.p.i === 0 ? ease(x) : s.p.i === 1 ? 1 : s.p.i === 2 ? 1 - ease(x) : 0;
+    }
+    const rMin = R * .38, rMax = R * .82, rr = rMin + (rMax - rMin) * vol;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 2 * Math.PI);
+    ctx.fillStyle = css(s && s.p ? COLORS[s.p.i] : '--rest'); ctx.globalAlpha = .14; ctx.fill();
+    ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.strokeStyle = ctx.fillStyle; ctx.stroke(); ctx.globalAlpha = 1;
+    // marker
+    if (s && s.p) {
+      let off = 0; for (const p of list) { if (p === s.p) break; off += p.dur; }
+      const ang = -Math.PI / 2 + 2 * Math.PI * (off + s.into) / tot;
+      ctx.beginPath(); ctx.arc(cx + R * Math.cos(ang), cy + R * Math.sin(ang), 9, 0, 2 * Math.PI);
+      ctx.fillStyle = css('--fg'); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = css('--panel'); ctx.stroke();
+    }
+  }
+
+  // ---------- events ----------
+  const changed = () => { save(); syncUI(); reset(); };
+  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { set.pattern = b.dataset.p; changed(); });
+  $('unit').onchange = () => { set.units[set.pattern] = Math.min(30, Math.max(.5, +$('unit').value || 4)); changed(); };
+  $('minutes').onchange = () => { set.minutes = Math.max(0, Math.round(+$('minutes').value || 0)); changed(); };
+  [0, 1, 2, 3].forEach(i => $('c' + i).onchange = () => { set.custom[i] = Math.max(0, +$('c' + i).value || 0); changed(); });
+  $('sound').onchange = () => { set.sound = $('sound').checked; save(); };
+  $('vibrate').onchange = () => { set.vibrate = $('vibrate').checked; save(); };
+  $('vol').oninput = () => { set.vol = +$('vol').value; if (master) master.gain.value = set.vol; save(); };
+  $('startBtn').onclick = () => state === 'running' ? pause() : (state === 'done' ? reset().then(start) : start());
+  $('resetBtn').onclick = reset;
+  addEventListener('hashchange', () => { const p = fromHash(); if (p && p !== set.pattern) { set.pattern = p; changed(); } });
+  document.addEventListener('visibilitychange', async () => {
+    if (state === 'running' && document.visibilityState === 'visible') try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+  });
+  addEventListener('resize', resize);
+
+  syncUI(); reset(); resize();
+})();
+</script>
+</body>
+</html>
