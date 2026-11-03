@@ -28,7 +28,11 @@ Mike (Kotlin/Android developer) looked at the Play Store app "Sound Spectrum Ana
 
 ## Status
 
-The code passes a syntax check. It has **not yet been tested on a real device** with a real microphone. First job: test it on Mike's phone via GitHub Pages and fix whatever breaks.
+Live on GitHub Pages at https://maniacalk.github.io/frequency-scope/ (public repo) and in use on Mike's Android phone in Chrome. Before pushing layout changes, check at phone width (390px, dark mode) in headless Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`.
+
+Lesson learned: body is a flex column, so its children have `flex-shrink:0`. Without that, panels with `overflow:hidden` get squashed and clipped when the page grows taller than the screen.
+
+Graph height is `min(34vh, 300px)`, kept compact at Mike's request.
 
 ## Possible next steps (not yet requested)
 
