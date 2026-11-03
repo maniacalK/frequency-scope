@@ -75,7 +75,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
 
 <section class="panel seg" role="group" aria-label="Pattern">
   <button data-p="box" aria-pressed="true">Box 1:1:1:1</button>
-  <button data-p="ratio" aria-pressed="false">1:4:2:1</button>
+  <button data-p="ratio" aria-pressed="false" id="ratioBtn">1:4:2:1</button>
   <button data-p="custom" aria-pressed="false">Custom</button>
 </section>
 
@@ -106,6 +106,9 @@ input[type=range]{width:110px;accent-color:var(--accent)}
     <label>Time unit <input type="number" id="unit" inputmode="decimal" min="0.5" max="30" step="0.5" value="4"> s</label>
     <label>Session <input type="number" id="minutes" inputmode="numeric" min="0" max="120" step="1" value="5"> min</label>
   </div>
+  <div class="row" id="ratioOpts" hidden>
+    <label><input type="checkbox" id="skipFinal"> Skip the final hold (1:4:2)</label>
+  </div>
   <div class="ratio" id="customBox" hidden>
     <label>Inhale<input type="number" id="c0" min="0" step="0.5" value="1"></label>
     <label>Hold<input type="number" id="c1" min="0" step="0.5" value="1"></label>
@@ -132,14 +135,15 @@ input[type=range]{width:110px;accent-color:var(--accent)}
   const NOTE = [659.26, 587.33, 493.88, 587.33];   // E5 inhale, D5 hold, B4 exhale
 
   // ---------- settings ----------
-  let set = { pattern: 'box', units: { box: 4, ratio: 4, custom: 4 }, custom: [1, 1, 2, 0], minutes: 5, sound: true, vol: .5, vibrate: false };
+  let set = { pattern: 'box', units: { box: 4, ratio: 4, custom: 4 }, custom: [1, 1, 2, 0], minutes: 5, sound: true, vol: .5, vibrate: false, skipFinal: false };
   try { const s = JSON.parse(localStorage.getItem('bp-set') || 'null'); if (s) set = { ...set, ...s, units: { ...set.units, ...s.units } }; } catch {}
   const save = () => { try { localStorage.setItem('bp-set', JSON.stringify(set)); } catch {} };
-  const fromHash = () => { const h = location.hash.slice(1); if (h === 'box' || h === 'custom') return h; if (h === '1-4-2-1') return 'ratio'; return null; };
+  const fromHash = () => { const h = location.hash.slice(1); if (h === 'box' || h === 'custom') return h; if (h === '1-4-2-1') { set.skipFinal = false; return 'ratio'; } if (h === '1-4-2') { set.skipFinal = true; return 'ratio'; } return null; };
   set.pattern = fromHash() || set.pattern;
 
   function phases() {
-    const r = set.pattern === 'custom' ? set.custom : PATTERNS[set.pattern];
+    let r = set.pattern === 'custom' ? set.custom : PATTERNS[set.pattern];
+    if (set.pattern === 'ratio' && set.skipFinal) r = [1, 4, 2, 0];
     const u = Math.max(0.5, +set.units[set.pattern] || 4);
     return r.map((x, i) => ({ i, name: NAMES[i], dur: Math.max(0, +x || 0) * u })).filter(p => p.dur > 0);
   }
@@ -152,11 +156,13 @@ input[type=range]{width:110px;accent-color:var(--accent)}
     $('minutes').value = set.minutes;
     set.custom.forEach((v, i) => $('c' + i).value = v);
     $('sound').checked = set.sound; $('vol').value = set.vol; $('vibrate').checked = set.vibrate;
+    $('ratioOpts').hidden = set.pattern !== 'ratio'; $('skipFinal').checked = set.skipFinal;
+    $('ratioBtn').textContent = set.skipFinal ? '1:4:2' : '1:4:2:1';
     const ps = phases(), c = cycleLen(ps);
     $('summary').innerHTML = ps.length && c > 0
       ? ps.map(p => `${p.name} <b>${+p.dur.toFixed(1)}s</b>`).join(' · ') + ` · round ${+c.toFixed(1)}s`
       : 'Set at least one phase above zero.';
-    const hash = set.pattern === 'ratio' ? '#1-4-2-1' : '#' + set.pattern;
+    const hash = set.pattern === 'ratio' ? (set.skipFinal ? '#1-4-2' : '#1-4-2-1') : '#' + set.pattern;
     if (location.hash !== hash) history.replaceState(null, '', hash);
   }
 
@@ -330,6 +336,7 @@ input[type=range]{width:110px;accent-color:var(--accent)}
   $('minutes').onchange = () => { set.minutes = Math.max(0, Math.round(+$('minutes').value || 0)); changed(); };
   [0, 1, 2, 3].forEach(i => $('c' + i).onchange = () => { set.custom[i] = Math.max(0, +$('c' + i).value || 0); changed(); });
   $('sound').onchange = () => { set.sound = $('sound').checked; save(); };
+  $('skipFinal').onchange = () => { set.skipFinal = $('skipFinal').checked; changed(); };
   $('vibrate').onchange = () => { set.vibrate = $('vibrate').checked; save(); };
   $('vol').oninput = () => { set.vol = +$('vol').value; if (master) master.gain.value = set.vol; save(); };
   $('startBtn').onclick = () => state === 'running' ? pause() : (state === 'done' ? reset().then(start) : start());
