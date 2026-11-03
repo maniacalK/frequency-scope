@@ -55,6 +55,11 @@ h2{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:
 .install b{color:var(--fg)}
 .install button{margin-top:10px;font:600 14px var(--sans);background:var(--accent);color:var(--bg);border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
 footer{color:var(--muted);font-size:12px}
+.share{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;font:600 15px var(--sans);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer}
+.share:active{background:var(--grid)}
+.share:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.share svg{width:20px;height:20px;color:var(--accent)}
+.share-note{text-align:center;color:var(--muted);font-size:13px;margin-top:-8px;min-height:1.2em}
 </style>
 </head>
 <body>
@@ -108,6 +113,12 @@ footer{color:var(--muted);font-size:12px}
   <button id="installBtn" hidden>Install app</button>
 </section>
 
+<button class="share" id="shareBtn" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+  Share Prana Tools
+</button>
+<div class="share-note" id="shareNote" aria-live="polite"></div>
+
 <footer>Works offline once installed. Breathing guidance is general information, not medical advice.</footer>
 
 <script>
@@ -129,6 +140,21 @@ footer{color:var(--muted);font-size:12px}
   });
   btn.onclick = async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; box.hidden = true; };
   addEventListener('appinstalled', () => { box.hidden = true; });
+})();
+</script>
+<script>
+(() => {
+  const url = new URL('./', location.href).href;   // always the app's home, wherever it's hosted
+  const btn = document.getElementById('shareBtn'), note = document.getElementById('shareNote');
+  const data = { title: 'Prana Tools', text: 'Breathing pacer (box, 4-7-8, 1:4:2:1), a Bhramari humming coach and a sound analyzer. Works on iPhone and Android:', url };
+  btn.onclick = async () => {
+    if (navigator.share) {
+      try { await navigator.share(data); return; }
+      catch (e) { if (e.name === 'AbortError') return; }   // user closed the share sheet
+    }
+    try { await navigator.clipboard.writeText(url); note.textContent = 'Link copied: ' + url; }
+    catch { note.textContent = url; }
+  };
 })();
 </script>
 <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
