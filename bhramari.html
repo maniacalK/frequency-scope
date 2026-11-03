@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bhramari Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Calm single-column coach: big pitch + status, range gauge, pitch-over-time trace, session stats */
+:root{
+  --bg:#f3f1ec; --panel:#ffffff; --fg:#1b1a17; --muted:#6b675e; --line:#dcd8cf; --grid:#ebe8e1;
+  --accent:#b07800; --ok:#1f8a4c; --low:#2f6fd0; --high:#c4511a; --band:rgba(31,138,76,.12);
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f0e0c; --panel:#18170f; --fg:#ece8dc; --muted:#9a9483; --line:#2d2b22; --grid:#221f18;
+  --accent:#f2b632; --ok:#4ade80; --low:#6aa5ff; --high:#ff8a4c; --band:rgba(74,222,128,.10); color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);
+  padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:12px;max-width:720px;margin:0 auto}
+body>*{flex-shrink:0}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:600 16px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:0}
+h1 span{color:var(--accent)}
+nav a{color:var(--muted);font-size:13px}
+button{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:9px 16px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.lbl{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.now{padding:14px 16px;display:grid;grid-template-columns:1fr auto;align-items:end;gap:6px 12px}
+.pitch{font:600 56px/1 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pitch small{font-size:18px;font-weight:500;color:var(--muted);margin-left:6px}
+.note{font:500 15px var(--mono);color:var(--muted);text-align:right}
+.status{grid-column:1/-1;font:600 17px var(--sans);padding:8px 12px;border-radius:8px;background:var(--grid);color:var(--muted);transition:background .2s,color .2s}
+.status.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.status.low{background:color-mix(in srgb,var(--low) 18%,transparent);color:var(--low)}
+.status.high{background:color-mix(in srgb,var(--high) 18%,transparent);color:var(--high)}
+.gauge{grid-column:1/-1;position:relative;height:22px;margin-top:4px}
+.gauge .track{position:absolute;inset:8px 0;border-radius:3px;background:var(--grid)}
+.gauge .zone{position:absolute;top:4px;bottom:4px;border-radius:4px;background:var(--band);border:1px solid var(--ok)}
+.gauge .needle{position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;border-radius:2px;background:var(--fg);transition:left .12s linear}
+
+.chart{position:relative;height:min(30vh,240px);min-height:170px}
+canvas{display:block;width:100%;height:100%}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--muted)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--panel);padding:10px 12px;min-width:0}
+.stat b{display:block;font:600 20px/1.2 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}.pitch{font-size:48px}}
+
+.settings{padding:12px 16px;display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;color:var(--muted);font-size:13px}
+.settings label{display:flex;gap:6px;align-items:center}
+input[type=number]{width:5em;font:14px var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+.cal{font-size:13px;padding:5px 12px}
+
+.breaths{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font:14px var(--mono);font-variant-numeric:tabular-nums}
+th,td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+td.empty{font:13px var(--sans);color:var(--muted);white-space:normal;text-align:left}
+.note-text{color:var(--muted);font-size:12px;max-width:70ch;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bhramari <span>Coach</span></h1>
+  <nav><a href="./">Spectrum analyzer</a></nav>
+</header>
+
+<section class="panel now" aria-live="polite">
+  <div>
+    <div class="lbl">Your hum</div>
+    <div class="pitch" id="pitch">—<small>Hz</small></div>
+  </div>
+  <div class="note" id="note">&nbsp;</div>
+  <div class="status" id="status">Press Start, then hum</div>
+  <div class="gauge" aria-hidden="true">
+    <div class="track"></div><div class="zone" id="zone"></div><div class="needle" id="needle" hidden></div>
+  </div>
+</section>
+
+<section class="panel chart">
+  <canvas id="cv"></canvas>
+  <div class="msg" id="msg">Your pitch over the last 30 seconds will draw here.<br>The shaded band is your target range.</div>
+</section>
+
+<section class="stats">
+  <div class="stat"><span class="lbl">Session</span><b id="sTime">0:00</b></div>
+  <div class="stat"><span class="lbl">Breaths</span><b id="sBreaths">0</b></div>
+  <div class="stat"><span class="lbl">This hum</span><b id="sHum">—</b></div>
+  <div class="stat"><span class="lbl">In range</span><b id="sIn">—</b></div>
+</section>
+
+<section class="panel settings">
+  <label>Target <input type="number" id="lo" inputmode="numeric" min="50" max="600" value="110"> to
+    <input type="number" id="hi" inputmode="numeric" min="50" max="600" value="140"> Hz</label>
+  <button class="cal" id="calBtn">Set from my hum</button>
+  <label><input type="checkbox" id="buzz"> Vibrate when out of range</label>
+  <div style="display:flex;gap:8px;margin-left:auto">
+    <button id="resetBtn">Reset session</button>
+    <button id="startBtn" class="primary">Start</button>
+  </div>
+</section>
+
+<section class="panel breaths">
+  <table>
+    <thead><tr><th>#</th><th>Length</th><th>Avg</th><th>In range</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4" class="empty">Each hum (exhale) appears here once it ends.</td></tr></tbody>
+  </table>
+</section>
+
+<p class="note-text">Pitch is measured from the waveform itself (autocorrelation), so it tracks the note you're humming rather than its louder overtones. Keep the phone 20–50 cm away and steady; a quiet room helps. "Set from my hum": hum comfortably for 3 seconds and the target becomes that pitch ±5%.</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const NOTES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const noteOf = f => { const m = 69 + 12 * Math.log2(f / 440), r = Math.round(m);
+    return NOTES[(r % 12 + 12) % 12] + (Math.floor(r / 12) - 1) + ' ' + (m - r >= 0 ? '+' : '') + Math.round((m - r) * 100) + '¢'; };
+  const fmtT = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+  const FMIN = 55, FMAX = 600, TICK = 50, HIST_MS = 30000, RMS_DB = -50, CLARITY = 0.8;
+  let ac, an, stream, buf, timer, wakeLock, running = false;
+  let hist = [], recent = [], cur = null, breaths = [], lastBuzz = 0, outSince = 0;
+  let sess = { start: 0, elapsed: 0, voiced: 0, inRange: 0 };
+  let cal = null;
+
+  // ---------- settings ----------
+  const target = () => {
+    let lo = +$('lo').value, hi = +$('hi').value;
+    if (!(lo > 0 && hi > lo)) { lo = 110; hi = 140; }
+    return { lo, hi };
+  };
+  try { const s = JSON.parse(localStorage.getItem('bh-set') || 'null');
+    if (s) { $('lo').value = s.lo; $('hi').value = s.hi; $('buzz').checked = !!s.buzz; } } catch {}
+  const save = () => { try { localStorage.setItem('bh-set', JSON.stringify({ lo: $('lo').value, hi: $('hi').value, buzz: $('buzz').checked })); } catch {} };
+  ['lo', 'hi', 'buzz'].forEach(id => $(id).addEventListener('change', () => { save(); drawGauge(null); drawChart(); }));
+
+  // ---------- pitch detection: McLeod normalised square difference ----------
+  function detect(x, sr) {
+    const N = x.length, minLag = Math.floor(sr / FMAX), maxLag = Math.min(Math.ceil(sr / FMIN), N >> 1);
+    const W = N - maxLag, nsdf = new Float32Array(maxLag + 2);
+    let e0 = 0; for (let i = 0; i < W; i++) e0 += x[i] * x[i];
+    let eT = 0; for (let i = 0; i < W; i++) eT += x[i] * x[i]; // energy of the lagged window, slid incrementally
+    for (let t = 0; t <= maxLag + 1 && t + W <= N; t++) {
+      if (t > 0) eT += x[t + W - 1] * x[t + W - 1] - x[t - 1] * x[t - 1];
+      if (t < minLag - 1) continue;
+      let acf = 0; for (let i = 0; i < W; i++) acf += x[i] * x[i + t];
+      const m = e0 + eT; nsdf[t] = m > 0 ? 2 * acf / m : 0;
+    }
+    // collect key maxima between positive zero crossings
+    let best = 0; const peaks = [];
+    let t = minLag; while (t < maxLag && nsdf[t] > 0) t++;
+    for (; t < maxLag; t++) {
+      if (nsdf[t] > 0 && nsdf[t] >= nsdf[t - 1] && nsdf[t] > nsdf[t + 1]) {
+        peaks.push(t); if (nsdf[t] > best) best = nsdf[t];
+      }
+    }
+    if (!peaks.length || best < CLARITY) return null;
+    const pick = peaks.find(p => nsdf[p] >= 0.9 * best);
+    const a = nsdf[pick - 1], b = nsdf[pick], c = nsdf[pick + 1], den = a - 2 * b + c;
+    const off = den ? Math.max(-.5, Math.min(.5, .5 * (a - c) / den)) : 0;
+    return { f: sr / (pick + off), clarity: b };
+  }
+  const median = a => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
+
+  // ---------- main loop ----------
+  function tick() {
+    const now = performance.now();
+    an.getFloatTimeDomainData(buf);
+    let ss = 0; for (let i = 0; i < buf.length; i++) ss += buf[i] * buf[i];
+    const db = 10 * Math.log10(ss / buf.length + 1e-12);
+    const d = db > RMS_DB ? detect(buf, ac.sampleRate) : null;
+
+    let f = null;
+    if (d) { recent.push(d.f); if (recent.length > 5) recent.shift(); f = median(recent); }
+    else recent = [];
+
+    hist.push({ t: now, f }); while (hist.length && now - hist[0].t > HIST_MS) hist.shift();
+    sess.elapsed = now - sess.start;
+    const { lo, hi } = target(), inR = f !== null && f >= lo && f <= hi;
+
+    if (cal) {
+      if (f !== null) cal.vals.push(f);
+      const left = Math.max(0, 3 - (now - cal.t0) / 1000);
+      $('status').className = 'status'; $('status').textContent = `Hum steadily… ${left.toFixed(1)} s`;
+      if (now - cal.t0 >= 3000) finishCal();
+    }
+
+    if (f !== null) {
+      sess.voiced += TICK; if (inR) sess.inRange += TICK;
+      if (!cur) cur = { start: now, last: now, sum: 0, n: 0, inN: 0 };
+      cur.last = now; cur.sum += f; cur.n++; if (inR) cur.inN++;
+      outSince = inR ? 0 : (outSince || now);
+      if ($('buzz').checked && outSince && now - outSince > 1500 && now - lastBuzz > 2000 && navigator.vibrate) {
+        navigator.vibrate(120); lastBuzz = now;
+      }
+    } else {
+      outSince = 0;
+      if (cur && now - cur.last > 400) endBreath();
+    }
+
+    if (!cal) showNow(f, lo, hi);
+    showStats();
+    drawChart();
+  }
+
+  function endBreath() {
+    const dur = cur.last - cur.start;
+    if (dur >= 1000) {
+      breaths.push({ dur, avg: cur.sum / cur.n, pct: Math.round(100 * cur.inN / cur.n) });
+      renderBreaths();
+    }
+    cur = null;
+  }
+
+  function showNow(f, lo, hi) {
+    const st = $('status');
+    if (f === null) {
+      $('pitch').innerHTML = '—<small>Hz</small>'; $('note').innerHTML = '&nbsp;';
+      st.className = 'status'; st.textContent = cur ? 'Hum…' : 'Inhale, then hum';
+      drawGauge(null); return;
+    }
+    $('pitch').innerHTML = Math.round(f) + '<small>Hz</small>';
+    $('note').textContent = noteOf(f);
+    if (f < lo) { st.className = 'status low'; st.textContent = `Too low · raise by ${Math.round(lo - f)} Hz`; }
+    else if (f > hi) { st.className = 'status high'; st.textContent = `Too high · lower by ${Math.round(f - hi)} Hz`; }
+    else { st.className = 'status ok'; st.textContent = 'In range · hold it there'; }
+    drawGauge(f);
+  }
+
+  function showStats() {
+    $('sTime').textContent = fmtT(sess.elapsed);
+    $('sBreaths').textContent = breaths.length;
+    $('sHum').textContent = cur ? ((cur.last - cur.start) / 1000).toFixed(1) + ' s' : '—';
+    $('sIn').textContent = sess.voiced ? Math.round(100 * sess.inRange / sess.voiced) + '%' : '—';
+  }
+
+  function renderBreaths() {
+    const { lo, hi } = target();
+    $('rows').innerHTML = breaths.slice(-8).reverse().map((b, i) => {
+      const n = breaths.length - i, col = b.avg < lo ? 'var(--low)' : b.avg > hi ? 'var(--high)' : 'var(--ok)';
+      return `<tr><td>${n}</td><td>${(b.dur / 1000).toFixed(1)} s</td><td style="color:${col}">${Math.round(b.avg)} Hz</td><td>${b.pct}%</td></tr>`;
+    }).join('');
+  }
+
+  // ---------- gauge: log scale from 0.75×low to 1.33×high ----------
+  function gaugeScale() { const { lo, hi } = target(); return { a: lo * 0.75, b: hi * 1.33, lo, hi }; }
+  const gx = (f, s) => Math.max(0, Math.min(100, 100 * Math.log(f / s.a) / Math.log(s.b / s.a)));
+  function drawGauge(f) {
+    const s = gaugeScale();
+    $('zone').style.left = gx(s.lo, s) + '%';
+    $('zone').style.width = (gx(s.hi, s) - gx(s.lo, s)) + '%';
+    $('needle').hidden = f === null;
+    if (f !== null) {
+      $('needle').style.left = gx(f, s) + '%';
+      $('needle').style.background = f < s.lo ? css('--low') : f > s.hi ? css('--high') : css('--ok');
+    }
+  }
+
+  // ---------- pitch history chart ----------
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const PAD = { l: 38, r: 10, t: 10, b: 20 };
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawChart();
+  }
+  function drawChart() {
+    const w = cv.clientWidth, h = cv.clientHeight, pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
+    const { lo, hi } = target(), fa = lo * 0.7, fb = hi * 1.45;
+    const y = f => PAD.t + ph * (1 - Math.log(f / fa) / Math.log(fb / fa));
+    const now = performance.now(), x = t => PAD.l + pw * (1 - (now - t) / HIST_MS);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '10px ' + css('--mono'); ctx.textAlign = 'right'; ctx.lineWidth = 1;
+    // target band
+    ctx.fillStyle = css('--band'); ctx.fillRect(PAD.l, y(hi), pw, y(lo) - y(hi));
+    ctx.strokeStyle = css('--ok'); ctx.setLineDash([4, 4]);
+    [lo, hi].forEach(f => { const yy = Math.round(y(f)) + .5; ctx.beginPath(); ctx.moveTo(PAD.l, yy); ctx.lineTo(PAD.l + pw, yy); ctx.stroke(); });
+    ctx.setLineDash([]);
+    // y labels
+    ctx.fillStyle = css('--muted');
+    [fa, lo, hi, fb].forEach(f => ctx.fillText(Math.round(f), PAD.l - 6, y(f) + 3));
+    // x labels (seconds ago)
+    ctx.textAlign = 'center';
+    [30, 20, 10, 0].forEach(s => ctx.fillText(s ? `-${s}s` : 'now', PAD.l + pw * (1 - s / 30), h - 5));
+    // trace: colour each segment by in/out of range
+    for (let i = 1; i < hist.length; i++) {
+      const a = hist[i - 1], b = hist[i];
+      if (a.f === null || b.f === null) continue;
+      const f = Math.max(fa, Math.min(fb, b.f));
+      ctx.strokeStyle = b.f < lo ? css('--low') : b.f > hi ? css('--high') : css('--ok');
+      ctx.lineWidth = 2.5; ctx.beginPath();
+      ctx.moveTo(x(a.t), y(Math.max(fa, Math.min(fb, a.f)))); ctx.lineTo(x(b.t), y(f)); ctx.stroke();
+    }
+  }
+
+  // ---------- calibration ----------
+  async function startCal() {
+    if (!running) { await start(); if (!running) return; }
+    cal = { t0: performance.now(), vals: [] };
+    $('calBtn').disabled = true;
+  }
+  function finishCal() {
+    const v = cal.vals; cal = null; $('calBtn').disabled = false;
+    if (v.length < 20) { $('status').className = 'status'; $('status').textContent = 'Couldn\'t hear a steady hum. Try again, a bit louder.'; return; }
+    const m = median(v);
+    $('lo').value = Math.round(m * 0.95); $('hi').value = Math.round(m * 1.05);
+    save(); renderBreaths(); drawGauge(null);
+  }
+
+  // ---------- start / stop ----------
+  async function start() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    } catch (e) {
+      $('msg').hidden = false;
+      $('msg').textContent = e.name === 'NotAllowedError'
+        ? 'Microphone access was blocked. Allow it in the browser\'s site settings, then press Start again.'
+        : 'Could not open the microphone (' + e.name + '). This page must be served over HTTPS.';
+      return;
+    }
+    ac = new (window.AudioContext || window.webkitAudioContext)(); await ac.resume();
+    an = ac.createAnalyser(); an.fftSize = 2048; buf = new Float32Array(an.fftSize);
+    ac.createMediaStreamSource(stream).connect(an);
+    running = true; $('msg').hidden = true;
+    if (!sess.start) sess.start = performance.now(); else sess.start = performance.now() - sess.elapsed;
+    $('startBtn').textContent = 'Pause';
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+    timer = setInterval(tick, TICK);
+  }
+  function stop() {
+    running = false; clearInterval(timer);
+    if (cur) endBreath();
+    stream?.getTracks().forEach(t => t.stop()); ac?.close();
+    try { wakeLock?.release(); } catch {}
+    $('startBtn').textContent = 'Resume';
+    $('status').className = 'status'; $('status').textContent = 'Paused';
+    $('pitch').innerHTML = '—<small>Hz</small>'; drawGauge(null);
+  }
+  function reset() {
+    hist = []; breaths = []; cur = null; sess = { start: running ? performance.now() : 0, elapsed: 0, voiced: 0, inRange: 0 };
+    $('rows').innerHTML = '<tr><td colspan="4" class="empty">Each hum (exhale) appears here once it ends.</td></tr>';
+    if (!running) $('startBtn').textContent = 'Start';
+    showStats(); drawChart();
+  }
+
+  $('startBtn').onclick = () => running ? stop() : start();
+  $('resetBtn').onclick = reset;
+  $('calBtn').onclick = startCal;
+  document.addEventListener('visibilitychange', async () => {
+    if (running && document.visibilityState === 'visible') try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+  });
+  addEventListener('resize', resize);
+  drawGauge(null); resize();
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,10 @@
 # Frequency Scope
 
+Two pages:
+
+- `index.html`: real-time spectrum analyzer
+- `bhramari.html`: Bhramari (bee breath) coach that keeps your humming pitch inside a target range
+
 A real-time audio frequency analyzer that runs in the browser. It listens to the microphone and shows:
 
 - A live spectrum graph (log frequency scale, 20 Hz–20 kHz) with a peak-hold trace
